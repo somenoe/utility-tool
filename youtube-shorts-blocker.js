@@ -1,8 +1,9 @@
 // Automatically execute the script when YouTube is loaded in a tab.
-// Paste on 'Custom script' on Chrome extension: Enhancer for YouTube™
-// https://chromewebstore.google.com/detail/enhancer-for-youtube/ponfpcnoihfmfllpaingbgckeeldkhle
+// Use on Chrome extension: 'User JavaScript and CSS', URL pattern: 'https://*.youtube.com/*'
+// https://chromewebstore.google.com/detail/user-javascript-and-css/nbhcbdghjpllgmfilhnhkllmkecfmpld
 
 (function () {
+	console.log("🏃 Script: YouTube Shorts Blocker");
     function createOverlay() {
         const overlay = document.createElement("div");
         overlay.style.cssText = `
