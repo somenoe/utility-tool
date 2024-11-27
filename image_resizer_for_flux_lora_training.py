@@ -21,13 +21,20 @@ def process_image(file_path):
     # Save to resized folder
     output_dir = os.path.join(os.path.dirname(os.path.dirname(file_path)))
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, os.path.basename(file_path))
+
+    # Convert .jpg to .png if necessary
+    base_filename, ext = os.path.splitext(os.path.basename(file_path))
+    if ext.lower() == '.jpg':
+        output_path = os.path.join(output_dir, base_filename + '.png')
+    else:
+        output_path = os.path.join(output_dir, os.path.basename(file_path))
+
     resized.save(output_path)
 
 def main():
-    input_dir = os.path.join(os.getcwd(), 'original')
+    input_dir = os.path.join(os.getcwd(), 'raw')
     for filename in os.listdir(input_dir):
-        if filename.endswith('.png'):
+        if filename.endswith('.png') or filename.endswith('.jpg'):
             file_path = os.path.join(input_dir, filename)
             process_image(file_path)
 
