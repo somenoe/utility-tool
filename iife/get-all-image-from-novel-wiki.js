@@ -18,6 +18,7 @@
       this.scrollEnabled = true;
       this.autoDownloadEnabled = true;
       this.stopShortcut = { ctrl: true, alt: true, key: 'KeyS' };
+      this.maxConcurrentDownloads = 5;
     }
   }
 
@@ -149,27 +150,40 @@
      */
     async downloadAndPackageImages(images, zip) {
       const results = { successCount: 0, failCount: 0 };
+      const chunks = this.chunkArray(Array.from(images), this.config.maxConcurrentDownloads);
 
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        const imgUrl = img.src.split('/revision')[0];
-        const fileName = imgUrl.split('/').pop();
+      for (const chunk of chunks) {
+        const promises = chunk.map(async (img, index) => {
+          const imgUrl = img.src.split('/revision')[0];
+          const fileName = imgUrl.split('/').pop();
 
-        try {
-          const response = await fetch(imgUrl);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          try {
+            console.info(`⏳ [${results.successCount + results.failCount + 1}/${images.length}] Fetching ${fileName}...`);
+            const response = await fetch(imgUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-          const blob = await response.blob();
-          zip.file(fileName, blob);
-          results.successCount++;
-          console.info(`✓ [${i + 1}/${images.length}] ${fileName}`);
-        } catch (error) {
-          results.failCount++;
-          console.error(`✗ [${i + 1}/${images.length}] Failed: ${fileName}`, error);
-        }
+            const blob = await response.blob();
+            zip.file(fileName, blob);
+            results.successCount++;
+            console.info(`✓ [${results.successCount + results.failCount}/${images.length}] ${fileName}`);
+          } catch (error) {
+            results.failCount++;
+            console.error(`✗ [${results.successCount + results.failCount}/${images.length}] Failed: ${fileName}`, error);
+          }
+        });
+
+        await Promise.all(promises);
       }
 
       return results;
+    }
+
+    chunkArray(array, chunkSize) {
+      const chunks = [];
+      for (let i = 0; i < array.length; i += chunkSize) {
+        chunks.push(array.slice(i, i + chunkSize));
+      }
+      return chunks;
     }
 
     /**
