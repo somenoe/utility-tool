@@ -21,6 +21,9 @@
       ctrl: true,
       alt: true,
       key: 'KeyN'
+    },
+    AUTO_NAVIGATE: {
+      enabled: true
     }
   });
 
@@ -92,6 +95,10 @@
       logResults(results);
 
       await createAndDownloadZip(zip, pageTitle);
+
+      if (CONFIG.AUTO_NAVIGATE.enabled) {  // Updated reference
+        navigateToNextPage();
+      }
     } catch (error) {
       console.error('Download process failed:', error);
     }
