@@ -1,9 +1,19 @@
+import logging
 from PIL import Image
 import os
 import argparse
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Protocol
 from enum import IntEnum
+
+def setup_logger() -> logging.Logger:
+    logger = logging.getLogger('ImageResizer')
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
 
 class FileSystem(Protocol):
     def list_directory(self, path: str) -> List[str]:
@@ -46,9 +56,11 @@ class Mode(IntEnum):
 class ImageProcessor:
     def __init__(self, fs: FileSystem):
         self.fs = fs
+        self.logger = logging.getLogger('ImageResizer')
 
     def crop_vertical(self, img: Image.Image, target_ratio: float, mode: Mode = Mode.ALL) -> Tuple[List[Image.Image], List[str]]:
         w, h = img.size
+        self.logger.info(f"Performing vertical crop on image of size {w}x{h}")
         new_height = int(w / target_ratio)
         all_crops = [
             img.crop((0, 0, w, new_height)),
@@ -65,6 +77,7 @@ class ImageProcessor:
 
     def crop_horizontal(self, img: Image.Image, target_ratio: float, mode: Mode = Mode.ALL) -> Tuple[List[Image.Image], List[str]]:
         w, h = img.size
+        self.logger.info(f"Performing horizontal crop on image of size {w}x{h}")
         new_width = int(h * target_ratio)
         all_crops = [
             img.crop((0, 0, new_width, h)),
@@ -80,6 +93,7 @@ class ImageProcessor:
         return all_crops, all_suffixes
 
     def process_image(self, file_path: str, mode: Mode = Mode.ALL) -> None:
+        self.logger.info(f"Processing image: {file_path}")
         img = Image.open(file_path)
         w, h = img.size
         target_ratio = 1.0
@@ -101,6 +115,7 @@ class ImageProcessor:
 
             output_path = self.fs.join_paths(output_dir, f"{base_filename}{suffix}.png")
             resized.save(output_path)
+            self.logger.debug(f"Saved processed image to: {output_path}")
 
 def main():
     parser = argparse.ArgumentParser(description='Image cropping and resizing tool')
@@ -108,15 +123,23 @@ def main():
                        help='1: Center only, 2: Non-center, 3: All crops')
     args = parser.parse_args()
 
+    logger = setup_logger()
+    logger.info("Starting image processing")
+
     fs = FileSystemImpl()
     processor = ImageProcessor(fs)
     mode = Mode(args.mode)  # Convert int to Mode enum
+    logger.info(f"Processing mode: {mode.name}")
 
     input_dir = fs.join_paths(fs.getcwd(), 'raw')
+    logger.info(f"Processing images from directory: {input_dir}")
+
     for filename in fs.list_directory(input_dir):
         if filename.endswith(('.png', '.jpg')):
             file_path = fs.join_paths(input_dir, filename)
             processor.process_image(file_path, mode)
+
+    logger.info("Image processing completed")
 
 if __name__ == '__main__':
     main()
