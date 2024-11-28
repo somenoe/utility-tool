@@ -1,74 +1,97 @@
 from PIL import Image
 import os
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Protocol
 
-def crop_vertical(img, target_ratio):
-    w, h = img.size
-    new_height = int(w / target_ratio)
-    crops = []
-    # Top/Start crop
-    crops.append(img.crop((0, 0, w, new_height)))
-    # Center crop
-    y_center = (h - new_height) // 2
-    crops.append(img.crop((0, y_center, w, y_center + new_height)))
-    # Bottom/End crop
-    crops.append(img.crop((0, h - new_height, w, h)))
-    return crops, ['_S', '_C', '_E']
+class FileSystem(Protocol):
+    def list_directory(self, path: str) -> List[str]:
+        ...
+    def join_paths(self, *paths: str) -> str:
+        ...
+    def get_basename(self, path: str) -> str:
+        ...
+    def split_ext(self, path: str) -> Tuple[str, str]:
+        ...
+    def makedirs(self, path: str) -> None:
+        ...
+    def getcwd(self) -> str:
+        ...
 
-def crop_horizontal(img, target_ratio):
-    w, h = img.size
-    new_width = int(h * target_ratio)
-    crops = []
-    # Left crop
-    crops.append(img.crop((0, 0, new_width, h)))
-    # Center crop
-    x_center = (w - new_width) // 2
-    crops.append(img.crop((x_center, 0, x_center + new_width, h)))
-    # Right crop
-    crops.append(img.crop((w - new_width, 0, w, h)))
-    return crops, ['_L', '_C', '_R']
+class FileSystemImpl:
+    def list_directory(self, path: str) -> List[str]:
+        return os.listdir(path)
 
-def process_image(file_path):
-    # Read image
-    img = Image.open(file_path)
-    w, h = img.size
-    target_ratio = 1.0  # Square ratio
+    def join_paths(self, *paths: str) -> str:
+        return os.path.join(*paths)
 
-    crops = []
-    suffixes = []
-    if h > w:  # Vertical image
-        crops, suffixes = crop_vertical(img, target_ratio)
-    else:  # Horizontal image
-        crops, suffixes = crop_horizontal(img, target_ratio)
+    def get_basename(self, path: str) -> str:
+        return os.path.basename(path)
 
-    # Process each crop
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(file_path)))
-    os.makedirs(output_dir, exist_ok=True)
+    def split_ext(self, path: str) -> Tuple[str, str]:
+        return os.path.splitext(path)
 
-    base_filename, ext = os.path.splitext(os.path.basename(file_path))
-    for crop, suffix in zip(crops, suffixes):
-        # Create square canvas with black background
-        max_dim = max(crop.size)
-        square = Image.new('RGB', (max_dim, max_dim), 'black')
+    def makedirs(self, path: str) -> None:
+        os.makedirs(path, exist_ok=True)
 
-        # Paste cropped image centered
-        x = (max_dim - crop.size[0]) // 2
-        y = (max_dim - crop.size[1]) // 2
-        square.paste(crop, (x, y))
+    def getcwd(self) -> str:
+        return os.getcwd()
 
-        # Resize to 512x512
-        resized = square.resize((512, 512))
+class ImageProcessor:
+    def __init__(self, fs: FileSystem):
+        self.fs = fs
 
-        # Save with appropriate suffix
-        output_filename = base_filename + suffix + '.png'
-        output_path = os.path.join(output_dir, output_filename)
-        resized.save(output_path)
+    def crop_vertical(self, img: Image.Image, target_ratio: float) -> Tuple[List[Image.Image], List[str]]:
+        w, h = img.size
+        new_height = int(w / target_ratio)
+        crops = [
+            img.crop((0, 0, w, new_height)),
+            img.crop((0, (h - new_height) // 2, w, (h - new_height) // 2 + new_height)),
+            img.crop((0, h - new_height, w, h))
+        ]
+        return crops, ['_S', '_C', '_E']
+
+    def crop_horizontal(self, img: Image.Image, target_ratio: float) -> Tuple[List[Image.Image], List[str]]:
+        w, h = img.size
+        new_width = int(h * target_ratio)
+        crops = [
+            img.crop((0, 0, new_width, h)),
+            img.crop(((w - new_width) // 2, 0, (w - new_width) // 2 + new_width, h)),
+            img.crop((w - new_width, 0, w, h))
+        ]
+        return crops, ['_L', '_C', '_R']
+
+    def process_image(self, file_path: str) -> None:
+        img = Image.open(file_path)
+        w, h = img.size
+        target_ratio = 1.0
+
+        crops, suffixes = (self.crop_vertical(img, target_ratio) if h > w
+                         else self.crop_horizontal(img, target_ratio))
+
+        # Simplified output directory - just use the parent directory of the input file
+        output_dir = self.fs.join_paths(os.path.dirname(file_path), '..')
+        self.fs.makedirs(output_dir)
+
+        base_filename, _ = self.fs.split_ext(self.fs.get_basename(file_path))
+
+        for crop, suffix in zip(crops, suffixes):
+            max_dim = max(crop.size)
+            square = Image.new('RGB', (max_dim, max_dim), 'black')
+            square.paste(crop, ((max_dim - crop.size[0]) // 2, (max_dim - crop.size[1]) // 2))
+            resized = square.resize((512, 512))
+
+            output_path = self.fs.join_paths(output_dir, f"{base_filename}{suffix}.png")
+            resized.save(output_path)
 
 def main():
-    input_dir = os.path.join(os.getcwd(), 'raw')
-    for filename in os.listdir(input_dir):
-        if filename.endswith('.png') or filename.endswith('.jpg'):
-            file_path = os.path.join(input_dir, filename)
-            process_image(file_path)
+    fs = FileSystemImpl()
+    processor = ImageProcessor(fs)
+
+    input_dir = fs.join_paths(fs.getcwd(), 'raw')
+    for filename in fs.list_directory(input_dir):
+        if filename.endswith(('.png', '.jpg')):
+            file_path = fs.join_paths(input_dir, filename)
+            processor.process_image(file_path)
 
 if __name__ == '__main__':
     main()
