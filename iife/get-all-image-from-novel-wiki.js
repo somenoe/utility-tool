@@ -16,6 +16,8 @@
       this.navigationShortcut = { ctrl: true, alt: true, key: 'KeyN' };
       this.autoNavigationEnabled = true;
       this.scrollEnabled = true;
+      this.autoDownloadEnabled = true;
+      this.stopShortcut = { ctrl: true, alt: true, key: 'KeyS' };
     }
   }
 
@@ -58,6 +60,7 @@
       this.config = config;
       this.navigationService = navigationService;
       this.fileService = fileService;
+      this.isAutoDownloadActive = false;
     }
 
     async initialize() {
@@ -66,6 +69,12 @@
           await this.scrollPageToLoadImages();
         }
         this.registerKeyboardShortcuts();
+
+        if (this.config.autoDownloadEnabled) {
+          this.isAutoDownloadActive = true;
+          await this.startDownloadProcess();
+        }
+
         console.info('Image Downloader initialized successfully');
       } catch (error) {
         console.error('Failed to initialize Image Downloader:', error);
@@ -73,8 +82,26 @@
     }
 
     async scrollPageToLoadImages() {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      window.scrollTo(0, document.body.scrollHeight);
+      const scrollStep = 200;
+      const scrollDelay = 500;
+      const documentHeight = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight
+      );
+
+      for (let position = 0; position < documentHeight; position += scrollStep) {
+        window.scrollTo({
+          top: position,
+          behavior: 'smooth'
+        });
+        await new Promise(resolve => setTimeout(resolve, scrollDelay));
+      }
+
+      // Scroll back to top
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
     }
 
     async startDownloadProcess() {
@@ -84,7 +111,7 @@
           throw new Error('No images found on the page');
         }
 
-        if (!await this.confirmDownload(imagesToDownload.length)) return;
+        if (!this.config.autoDownloadEnabled && !await this.confirmDownload(imagesToDownload.length)) return;
 
         await this.fileService.loadJSZipLibrary(this.config.jszipLibraryUrl);
         const zipArchive = new JSZip();
@@ -188,8 +215,12 @@
         return false;
       }
 
-      this.navigationService.navigateToUrl(nextPageUrl);
-      return true;
+      if (this.isAutoDownloadActive) {
+        this.navigationService.navigateToUrl(nextPageUrl);
+        return true;
+      }
+
+      return false;
     }
 
     registerKeyboardShortcuts() {
@@ -202,6 +233,11 @@
         if (this.isNavigationShortcutPressed(event)) {
           event.preventDefault();
           this.navigateToNextPage();
+        }
+
+        if (this.isStopShortcutPressed(event)) {
+          event.preventDefault();
+          this.stopAutoDownload();
         }
       });
     }
@@ -218,6 +254,19 @@
       return event.ctrlKey === shortcut.ctrl &&
         event.altKey === shortcut.alt &&
         event.code === shortcut.key;
+    }
+
+    isStopShortcutPressed(event) {
+      const shortcut = this.config.stopShortcut;
+      return event.ctrlKey === shortcut.ctrl &&
+        event.altKey === shortcut.alt &&
+        event.code === shortcut.key;
+    }
+
+    stopAutoDownload() {
+      this.isAutoDownloadActive = false;
+      this.config.autoDownloadEnabled = false;
+      console.info('Auto-download stopped');
     }
   }
 
