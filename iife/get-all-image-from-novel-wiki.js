@@ -24,6 +24,9 @@
     },
     AUTO_NAVIGATE: {
       enabled: true
+    },
+    SCROLL: {
+      enabled: false
     }
   });
 
@@ -37,38 +40,28 @@
    * Initializes the image downloader
    * @throws {Error} If initialization fails
    */
-  function initialize() {
+  async function initialize() {
     try {
+      if (CONFIG.SCROLL.enabled) {
+        await scrollPage();
+      }
       registerKeyboardShortcut();
       console.info('Image Downloader initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Image Downloader:', error);
     }
   }
+
   /**
    * Scrolls the page to bottom and back to top
    * @async
    * @returns {Promise<void>}
    */
   async function scrollPage() {
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Add 1s delay
     window.scrollTo(0, document.body.scrollHeight);
     await new Promise(resolve => setTimeout(resolve, 1000));
     window.scrollTo(0, 0);
-  }
-
-  /**
-   * Initializes the image downloader with page scroll
-   * @async
-   * @throws {Error} If initialization fails
-   */
-  async function initialize() {
-    try {
-      await scrollPage();
-      registerKeyboardShortcut();
-      console.info('Image Downloader initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize Image Downloader:', error);
-    }
   }
 
   /**
