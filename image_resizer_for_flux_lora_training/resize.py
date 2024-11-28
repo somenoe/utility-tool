@@ -5,6 +5,8 @@ import argparse
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Protocol
 from enum import IntEnum
+import multiprocessing
+from functools import partial
 
 def setup_logger() -> logging.Logger:
     logger = logging.getLogger('ImageResizer')
@@ -117,27 +119,43 @@ class ImageProcessor:
             resized.save(output_path)
             self.logger.debug(f"Saved processed image to: {output_path}")
 
+def process_image_worker(file_info: Tuple[str, Mode], fs: FileSystem) -> None:
+    file_path, mode = file_info
+    try:
+        processor = ImageProcessor(fs)
+        processor.process_image(file_path, mode)
+    except Exception as e:
+        logging.error(f"Error processing {file_path}: {str(e)}")
+
 def main():
     parser = argparse.ArgumentParser(description='Image cropping and resizing tool')
     parser.add_argument('mode', type=int, choices=[1, 2, 3],
                        help='1: Center only, 2: Non-center, 3: All crops')
+    parser.add_argument('--workers', type=int, default=multiprocessing.cpu_count(),
+                       help='Number of worker processes')
     args = parser.parse_args()
 
     logger = setup_logger()
     logger.info("Starting image processing")
 
     fs = FileSystemImpl()
-    processor = ImageProcessor(fs)
-    mode = Mode(args.mode)  # Convert int to Mode enum
+    mode = Mode(args.mode)
     logger.info(f"Processing mode: {mode.name}")
 
     input_dir = fs.join_paths(fs.getcwd(), 'raw')
     logger.info(f"Processing images from directory: {input_dir}")
 
+    # Prepare work items
+    work_items = []
     for filename in fs.list_directory(input_dir):
         if filename.endswith(('.png', '.jpg')):
             file_path = fs.join_paths(input_dir, filename)
-            processor.process_image(file_path, mode)
+            work_items.append((file_path, mode))
+
+    # Process images in parallel
+    with multiprocessing.Pool(processes=args.workers) as pool:
+        worker_func = partial(process_image_worker, fs=fs)
+        pool.map(worker_func, work_items)
 
     logger.info("Image processing completed")
 
