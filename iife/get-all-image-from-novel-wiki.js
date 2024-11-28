@@ -16,6 +16,11 @@
       ctrl: true,
       alt: true,
       key: 'KeyD'
+    },
+    NEXT_PAGE_SHORTCUT: {
+      ctrl: true,
+      alt: true,
+      key: 'KeyN'
     }
   });
 
@@ -193,7 +198,28 @@
   }
 
   /**
-   * Registers keyboard shortcut
+   * Navigate to next page if available
+   * @returns {boolean} True if navigation successful, false otherwise
+   */
+  function navigateToNextPage() {
+    const nextPageCell = document.querySelector('td[data-source="next"]');
+    if (!nextPageCell) {
+      alert('Next page element not found');
+      return false;
+    }
+
+    const nextPageLink = nextPageCell.querySelector('a');
+    if (!nextPageLink) {
+      alert('No next page available');
+      return false;
+    }
+
+    window.location.href = nextPageLink.href;
+    return true;
+  }
+
+  /**
+   * Registers keyboard shortcuts
    */
   function registerKeyboardShortcut() {
     document.addEventListener('keydown', event => {
@@ -202,6 +228,13 @@
         event.code === CONFIG.SHORTCUT.key) {
         event.preventDefault();
         startDownload();
+      }
+
+      if (event.ctrlKey === CONFIG.NEXT_PAGE_SHORTCUT.ctrl &&
+        event.altKey === CONFIG.NEXT_PAGE_SHORTCUT.alt &&
+        event.code === CONFIG.NEXT_PAGE_SHORTCUT.key) {
+        event.preventDefault();
+        navigateToNextPage();
       }
     });
   }
